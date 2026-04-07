@@ -59,4 +59,3 @@ VITE_GOOGLE_SHEET_GID_SCHOOL_ADS=...
 
 ## Лицензия
 MIT — используйте во благо Школы!
-```
