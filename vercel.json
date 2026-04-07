@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth-api/:path*",
+      "destination": "https://auth.21-school.ru/:path*"
+    },
+    {
+      "source": "/platform-api/:path*",
+      "destination": "https://platform.21-school.ru/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
