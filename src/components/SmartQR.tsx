@@ -46,7 +46,12 @@ export const SmartQR = ({ items, size = 124 }: SmartQRProps) => {
   }
 
   return (
-    <Wrapper as={motion.div} initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: 'easeOut' }}>
+    <Wrapper
+      as={motion.div}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+    >
       <Grid style={{ ['--qr-cols' as string]: items.length === 1 ? 1 : 2 }}>
         {items.map((item) => (
           <QrCard

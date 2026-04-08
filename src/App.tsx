@@ -15,9 +15,7 @@ interface GroupedEvents {
   events: EventItem[]
 }
 
-type RotationItem =
-  | { type: 'event'; event: EventItem }
-  | { type: 'ad-slot' }
+type RotationItem = { type: 'event'; event: EventItem } | { type: 'ad-slot' }
 
 const Dashboard = styled.div`
   height: 100vh;
@@ -93,7 +91,9 @@ const dateLabel = (date: Date, now: Date) => {
 
 function App() {
   const [events, setEvents] = useState<EventItem[]>([])
-  const [config, setConfig] = useState<DynamicDashboardConfig>(DEFAULT_DYNAMIC_CONFIG)
+  const [config, setConfig] = useState<DynamicDashboardConfig>(
+    DEFAULT_DYNAMIC_CONFIG,
+  )
   const [error, setError] = useState<string | null>(null)
   const [toastError, setToastError] = useState<string | null>(null)
   const [isConfigLoaded, setIsConfigLoaded] = useState(false)
@@ -106,9 +106,11 @@ function App() {
   const wasAdSlotRef = useRef(false)
   const currentPreloadedAssetRef = useRef<string | null>(null)
   const isLoadingRef = useRef(false)
+  const rotationTimerRef = useRef<number | null>(null)
 
   const getDashboardErrorText = useCallback((loadError: unknown): string => {
-    const message = loadError instanceof Error ? loadError.message : String(loadError)
+    const message =
+      loadError instanceof Error ? loadError.message : String(loadError)
     const normalized = message.toLowerCase()
 
     if (
@@ -122,16 +124,20 @@ function App() {
     return 'Не удалось обновить события. Проверьте сеть и попробуйте снова.'
   }, [])
 
-  const resolveEventAsset = useCallback((event: EventItem | null): string | null => {
-    if (!event) {
-      return null
-    }
-    const haystack = `${event.name} ${event.description} ${event.location}`.toUpperCase()
-    const pair = Object.entries(config.clubAssets).find(([key]) =>
-      haystack.includes(key.toUpperCase()),
-    )
-    return pair ? pair[1] : null
-  }, [config.clubAssets])
+  const resolveEventAsset = useCallback(
+    (event: EventItem | null): string | null => {
+      if (!event) {
+        return null
+      }
+      const haystack =
+        `${event.name} ${event.description} ${event.location}`.toUpperCase()
+      const pair = Object.entries(config.clubAssets).find(([key]) =>
+        haystack.includes(key.toUpperCase()),
+      )
+      return pair ? pair[1] : null
+    },
+    [config.clubAssets],
+  )
 
   const loadEvents = useCallback(async () => {
     if (isLoadingRef.current) {
@@ -148,7 +154,11 @@ function App() {
           new Date(a.startDateTime).getTime() -
           new Date(b.startDateTime).getTime(),
       )
-      setEvents(sorted.filter((event) => new Date(event.endDateTime).getTime() > Date.now()))
+      setEvents(
+        sorted.filter(
+          (event) => new Date(event.endDateTime).getTime() > Date.now(),
+        ),
+      )
       setError(null)
     } catch (loadError) {
       console.error('Failed to load events:', loadError)
@@ -176,35 +186,37 @@ function App() {
     }
   }, [toastError])
 
-  // Функция для загрузки конфига
   const loadConfig = useCallback(async () => {
-    const sheetId = import.meta.env.VITE_GOOGLE_SHEET_ID?.trim();
+    const sheetId = import.meta.env.VITE_GOOGLE_SHEET_ID?.trim()
     if (!sheetId) {
-      setConfig(DEFAULT_DYNAMIC_CONFIG);
-      setIsConfigLoaded(true);
-      return;
+      setConfig(DEFAULT_DYNAMIC_CONFIG)
+      setIsConfigLoaded(true)
+      return
     }
 
     try {
-      const loadedConfig = await fetchDynamicConfig(sheetId);
-      setConfig(loadedConfig);
-      setIsConfigLoaded(true);
+      const loadedConfig = await fetchDynamicConfig(sheetId)
+      setConfig(loadedConfig)
+      setIsConfigLoaded(true)
     } catch (err) {
-      console.error("Failed to refresh config:", err);
+      console.error('Failed to refresh config:', err)
       // Если не удалось загрузить, оставляем старый конфиг в памяти
     }
-  }, []);
+  }, [])
 
   // Первоначальная загрузка конфига и установка таймера на его обновление
   useEffect(() => {
-    void loadConfig();
+    void loadConfig()
 
-    const configRefreshId = window.setInterval(() => {
-      void loadConfig();
-    }, 15 * 60 * 1000); 
+    const configRefreshId = window.setInterval(
+      () => {
+        void loadConfig()
+      },
+      15 * 60 * 1000,
+    )
 
-    return () => window.clearInterval(configRefreshId);
-  }, [loadConfig]);
+    return () => window.clearInterval(configRefreshId)
+  }, [loadConfig])
 
   useEffect(() => {
     if (!isConfigLoaded) {
@@ -257,9 +269,13 @@ function App() {
   }, [])
 
   const now = useMemo(() => new Date(nowTs), [nowTs])
+
   const liveEvents = useMemo(
-    () => events.filter((event) => new Date(event.endDateTime).getTime() > nowTs),
-    [events, nowTs],
+    () =>
+      events.filter(
+        (event) => new Date(event.endDateTime).getTime() > Date.now(),
+      ),
+    [events],
   )
 
   const rotationItems = useMemo<RotationItem[]>(() => {
@@ -268,16 +284,17 @@ function App() {
     }
 
     const mixed: RotationItem[] = []
+    const freq = config.adFrequency || 3
 
     liveEvents.forEach((event, index) => {
       mixed.push({ type: 'event', event })
-      if ((index + 1) % 3 === 0 && config.schoolAds.length > 0) {
+      if ((index + 1) % freq === 0 && config.schoolAds.length > 0) {
         mixed.push({ type: 'ad-slot' })
       }
     })
 
     return mixed
-  }, [config.schoolAds.length, liveEvents])
+  }, [config.schoolAds.length, config.adFrequency, liveEvents])
 
   const safeIndex =
     rotationItems.length > 0 ? activeEventIndex % rotationItems.length : 0
@@ -291,25 +308,13 @@ function App() {
     config.debugMockLive && liveEvents.length > 0 ? liveEvents[0].id : null
 
   useEffect(() => {
-    if (rotationItems.length <= 1) {
-      return
+    if (activeSlide?.type === 'ad-slot') {
+      wasAdSlotRef.current = true
+    } else if (wasAdSlotRef.current) {
+      setAdDisplayIndex((prev) => prev + 1)
+      wasAdSlotRef.current = false
     }
-    const intervalId = window.setInterval(() => {
-      setActiveEventIndex((prev) => prev + 1)
-    }, config.rotationIntervalMs)
-
-    return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [config.rotationIntervalMs, rotationItems.length])
-
-  useEffect(() => {
-    const isAdSlot = activeSlide?.type === 'ad-slot'
-    if (wasAdSlotRef.current && !isAdSlot && config.schoolAds.length > 0) {
-      setAdDisplayIndex((prev) => (prev + 1) % config.schoolAds.length)
-    }
-    wasAdSlotRef.current = Boolean(isAdSlot)
-  }, [activeSlide, config.schoolAds.length])
+  }, [activeEventIndex, activeSlide?.type])
 
   useEffect(() => {
     if (!activeEvent || !sidebarContentRef.current) {
@@ -321,7 +326,7 @@ function App() {
     )
 
     activeNode?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [activeEventIndex, activeEvent?.id])
+  }, [activeEventIndex, activeEvent])
 
   useEffect(() => {
     if (rotationItems.length === 0) {
@@ -332,7 +337,8 @@ function App() {
     const nextAsset =
       nextSlide.type === 'event'
         ? resolveEventAsset(nextSlide.event)
-        : config.schoolAds[adDisplayIndex % config.schoolAds.length]?.imageUrl ?? null
+        : (config.schoolAds[adDisplayIndex % config.schoolAds.length]
+            ?.imageUrl ?? null)
 
     if (!nextAsset || nextAsset === currentPreloadedAssetRef.current) {
       return
@@ -341,7 +347,13 @@ function App() {
     const img = new Image()
     img.src = nextAsset
     currentPreloadedAssetRef.current = nextAsset
-  }, [adDisplayIndex, config.schoolAds, resolveEventAsset, rotationItems, safeIndex])
+  }, [
+    adDisplayIndex,
+    config.schoolAds,
+    resolveEventAsset,
+    rotationItems,
+    safeIndex,
+  ])
 
   const groups = useMemo<GroupedEvents[]>(() => {
     const map = new Map<string, EventItem[]>()
@@ -366,6 +378,36 @@ function App() {
       }))
   }, [liveEvents, now])
 
+  const startRotation = useCallback(() => {
+    if (rotationItems.length <= 1) return
+    rotationTimerRef.current = window.setInterval(() => {
+      setActiveEventIndex((prev) => prev + 1)
+    }, config.rotationIntervalMs)
+  }, [config.rotationIntervalMs, rotationItems.length])
+
+  const handleManualSelect = useCallback(
+    (eventId: number) => {
+      const index = rotationItems.findIndex(
+        (item) => item.type === 'event' && item.event.id === eventId,
+      )
+      if (index !== -1) {
+        setActiveEventIndex(index)
+        if (rotationTimerRef.current)
+          window.clearInterval(rotationTimerRef.current)
+        startRotation()
+      }
+    },
+    [rotationItems, startRotation],
+  )
+
+  useEffect(() => {
+    startRotation()
+    return () => {
+      if (rotationTimerRef.current)
+        window.clearInterval(rotationTimerRef.current)
+    }
+  }, [startRotation])
+
   return (
     <>
       {toastError && <Toast>{toastError}</Toast>}
@@ -376,13 +418,20 @@ function App() {
           clubAssets={config.clubAssets}
           tagColors={config.tagColors}
           debugMockLive={config.debugMockLive}
-          slideKey={activeSlide?.type === 'event' ? `event-${activeSlide.event.id}` : `ad-${activeAd?.id ?? 'fallback'}`}
+          slideKey={
+            activeSlide?.type === 'event'
+              ? `event-${activeSlide.event.id}`
+              : `ad-${activeAd?.id ?? 'fallback'}`
+          }
           activeIndex={safeIndex}
           forcedLiveEventId={forcedLiveEventId}
+          duration={config.rotationIntervalMs}
         />
         <Sidebar>
           <SidebarContent ref={sidebarContentRef}>
-            {(error || isRefreshing) && <Message>{error ?? 'Обновление данных...'}</Message>}
+            {(error || isRefreshing) && (
+              <Message>{error ?? 'Обновление данных...'}</Message>
+            )}
             {groups.map((group) => (
               <DateGroup
                 key={group.title}
@@ -392,15 +441,22 @@ function App() {
                 tagColors={config.tagColors}
                 activeEventId={activeEvent?.id ?? null}
                 forcedLiveEventId={forcedLiveEventId}
+                onEventClick={handleManualSelect}
               />
             ))}
-            {!isConfigLoaded && <Message>Загружаем конфигурацию экрана...</Message>}
-            {groups.length === 0 && !error && !isRefreshing && !hasLoadedOnce && (
-              <Message>Обновление данных...</Message>
+            {!isConfigLoaded && (
+              <Message>Загружаем конфигурацию экрана...</Message>
             )}
-            {groups.length === 0 && !error && !isRefreshing && hasLoadedOnce && (
-              <Message>Нет активных ивентов на этой неделе</Message>
-            )}
+            {groups.length === 0 &&
+              !error &&
+              !isRefreshing &&
+              !hasLoadedOnce && <Message>Обновление данных...</Message>}
+            {groups.length === 0 &&
+              !error &&
+              !isRefreshing &&
+              hasLoadedOnce && (
+                <Message>Нет активных ивентов на этой неделе</Message>
+              )}
           </SidebarContent>
         </Sidebar>
       </Dashboard>

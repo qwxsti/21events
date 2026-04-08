@@ -18,6 +18,7 @@ interface MainDisplayProps {
   slideKey: string
   activeIndex: number
   forcedLiveEventId?: number | null
+  duration: number
 }
 
 const Wrapper = styled.main`
@@ -40,6 +41,28 @@ const Slide = styled(motion.div)`
   `};
 `
 
+const ProgressContainer = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  z-index: 10;
+`
+
+const ProgressBar = styled(motion.div)<{ $color: string }>`
+  position: absolute; /* Важно для анимации выхода */
+  top: 0;
+  left: 0;
+  width: 100%; /* Теперь ширина всегда 100%, анимируем через scaleX */
+  height: 100%;
+  background: ${({ $color }) => $color};
+  box-shadow: 0 0 15px ${({ $color }) => $color};
+  transform-origin: left;
+  will-change: transform, opacity;
+`
+
 const BackgroundImage = styled.img`
   position: absolute;
   inset: 0;
@@ -53,8 +76,17 @@ const BackgroundImage = styled.img`
 const GradientFlow = styled.div`
   position: absolute;
   inset: -20%;
-  background: radial-gradient(circle at 30% 35%, rgba(255, 255, 255, 0.14), transparent 45%),
-    radial-gradient(circle at 70% 65%, rgba(255, 255, 255, 0.1), transparent 40%);
+  background:
+    radial-gradient(
+      circle at 30% 35%,
+      rgba(255, 255, 255, 0.14),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 70% 65%,
+      rgba(255, 255, 255, 0.1),
+      transparent 40%
+    );
   filter: blur(12px);
 `
 
@@ -150,7 +182,7 @@ const Title = styled.h1`
 const Description = styled.p`
   margin: 2px 0 0;
   max-width: 100%;
-  font-size: clamp(2rem, 2.0vw, 2.5rem);
+  font-size: clamp(2rem, 2vw, 2.5rem);
   line-height: 1.35;
   color: ${({ theme }) => theme.colors.textSecondary};
 `
@@ -171,7 +203,8 @@ const resolveClubAsset = (
     return null
   }
 
-  const haystack = `${event.name} ${event.location} ${event.description}`.toUpperCase()
+  const haystack =
+    `${event.name} ${event.location} ${event.description}`.toUpperCase()
   const match = Object.entries(clubAssets).find(([clubKey]) =>
     haystack.includes(clubKey.toUpperCase()),
   )
@@ -210,26 +243,30 @@ const hostFromUrl = (url: string) => {
   }
 }
 
-const buildQrItems = (event: EventItem | null): QrItem[] => {
-  if (!event) {
-    return []
+const buildQrItems = (
+  activeEvent: EventItem | null,
+  activeAd: SchoolAdItem | null,
+): QrItem[] => {
+  const dedup = new Map<string, QrItem>()
+
+  const processText = (text: string) => {
+    if (!text) return
+    extractUrls(text).forEach((url) => {
+      if (!dedup.has(url)) {
+        dedup.set(url, { url, label: hostFromUrl(url) })
+      }
+    })
   }
 
-  const locationUrls = extractUrls(event.location).map((url) => ({
-    url,
-    label: hostFromUrl(url),
-  }))
-  const descriptionUrls = extractUrls(event.description).map((url) => ({
-    url,
-    label: hostFromUrl(url),
-  }))
+  if (activeAd) {
+    processText(activeAd.text)
+    processText(activeAd.subtext)
+  }
 
-  const dedup = new Map<string, QrItem>()
-  ;[...locationUrls, ...descriptionUrls].forEach((item) => {
-    if (!dedup.has(item.url)) {
-      dedup.set(item.url, item)
-    }
-  })
+  if (activeEvent) {
+    processText(activeEvent.location)
+    processText(activeEvent.description)
+  }
 
   return [...dedup.values()]
 }
@@ -243,19 +280,28 @@ const MainDisplayComponent = ({
   slideKey,
   activeIndex,
   forcedLiveEventId = null,
+  duration,
 }: MainDisplayProps) => {
   const clubAsset = useMemo(
     () => resolveClubAsset(activeEvent, clubAssets),
     [activeEvent, clubAssets],
   )
+
+  const progressColor = useMemo(() => {
+    if (activeAd) return '#4CC2D7'
+    return getTagColor(activeEvent?.location ?? '', tagColors)
+  }, [activeAd, activeEvent, tagColors])
+
   const adImage = activeAd?.imageUrl
   const imageUrl = adImage ?? clubAsset
+
   const isLive = useMemo(
     () => isEventLive(activeEvent, forcedLiveEventId, debugMockLive),
     [activeEvent, debugMockLive, forcedLiveEventId],
   )
+
   const qrItems = useMemo(
-    () => (activeAd ? [] : buildQrItems(activeEvent)),
+    () => buildQrItems(activeEvent, activeAd),
     [activeAd, activeEvent],
   )
   const locationColor = useMemo(
@@ -265,19 +311,60 @@ const MainDisplayComponent = ({
   const paletteSeed = (activeEvent?.id ?? activeIndex) % 3
   const meshPalette = useMemo(
     () =>
-    paletteSeed === 0
-      ? ['rgba(157, 78, 221, 0.95)', 'rgba(76, 194, 215, 0.88)', 'rgba(93, 114, 255, 0.72)', 'rgba(134, 70, 255, 0.62)']
-      : paletteSeed === 1
-        ? ['rgba(16, 185, 129, 0.92)', 'rgba(76, 194, 215, 0.88)', 'rgba(29, 125, 159, 0.72)', 'rgba(41, 180, 147, 0.62)']
-        : ['rgba(241, 90, 181, 0.9)', 'rgba(157, 78, 221, 0.84)', 'rgba(76, 194, 215, 0.76)', 'rgba(201, 81, 219, 0.62)'],
+      paletteSeed === 0
+        ? [
+            'rgba(157, 78, 221, 0.95)',
+            'rgba(76, 194, 215, 0.88)',
+            'rgba(93, 114, 255, 0.72)',
+            'rgba(134, 70, 255, 0.62)',
+          ]
+        : paletteSeed === 1
+          ? [
+              'rgba(16, 185, 129, 0.92)',
+              'rgba(76, 194, 215, 0.88)',
+              'rgba(29, 125, 159, 0.72)',
+              'rgba(41, 180, 147, 0.62)',
+            ]
+          : [
+              'rgba(241, 90, 181, 0.9)',
+              'rgba(157, 78, 221, 0.84)',
+              'rgba(76, 194, 215, 0.76)',
+              'rgba(201, 81, 219, 0.62)',
+            ],
     [paletteSeed],
   )
 
   return (
     <Wrapper>
+      <ProgressContainer>
+        <AnimatePresence mode="popLayout">
+          <ProgressBar
+            key={`progress-${slideKey}`}
+            $color={progressColor}
+            initial={{ scaleX: 0, opacity: 1, x: 0 }}
+            animate={{ scaleX: 1, opacity: 1, x: 0 }}
+            exit={{
+              opacity: 0,
+              x: '100%',
+              transition: { duration: 0.4, ease: 'easeIn' },
+            }}
+            transition={{
+              scaleX: { duration: duration / 1000, ease: 'linear' },
+              opacity: { duration: 0.3 },
+            }}
+          />
+        </AnimatePresence>
+      </ProgressContainer>
       <AnimatePresence mode="wait" initial={false}>
         {qrItems.length > 0 && (
-          <QrHolder as={motion.div} key={`qr-${slideKey}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.35, ease: 'easeOut' }}>
+          <QrHolder
+            as={motion.div}
+            key={`qr-${slideKey}`}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
             <SmartQR items={qrItems} />
           </QrHolder>
         )}
@@ -290,7 +377,9 @@ const MainDisplayComponent = ({
           exit={{ opacity: 0, scale: 0.985 }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
         >
-          {imageUrl && <BackgroundImage src={imageUrl} alt="" loading="eager" />}
+          {imageUrl && (
+            <BackgroundImage src={imageUrl} alt="" loading="eager" />
+          )}
           {!imageUrl && (
             <>
               <GradientFlow />
@@ -347,7 +436,9 @@ const MainDisplayComponent = ({
                 ) : (
                   <>
                     <PillsRow>
-                      <Pill $bg={locationColor}>{activeEvent?.location ?? 'Локация'}</Pill>
+                      <Pill $bg={locationColor}>
+                        {activeEvent?.location ?? 'Локация'}
+                      </Pill>
                       <Pill>
                         {activeEvent
                           ? formatDateTime(activeEvent.startDateTime)
@@ -355,9 +446,12 @@ const MainDisplayComponent = ({
                       </Pill>
                       {isLive && <StatusBadge $isLive>ИДЕТ СЕЙЧАС</StatusBadge>}
                     </PillsRow>
-                    <Title>{activeEvent?.name ?? 'Ивенты скоро появятся'}</Title>
+                    <Title>
+                      {activeEvent?.name ?? 'Ивенты скоро появятся'}
+                    </Title>
                     <Description>
-                      {activeEvent?.description || 'Описание события скоро появится.'}
+                      {activeEvent?.description ||
+                        'Описание события скоро появится.'}
                     </Description>
                   </>
                 )}

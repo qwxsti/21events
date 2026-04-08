@@ -11,6 +11,7 @@ interface DateGroupProps {
   tagColors: TagColorItem[]
   activeEventId: number | null
   forcedLiveEventId?: number | null
+  onEventClick: (id: number) => void
 }
 
 const Wrapper = styled.section`
@@ -24,9 +25,14 @@ const Title = styled.h3`
   line-height: 1.1;
   color: ${({ theme }) => theme.colors.textSecondary};
   font-weight: 700;
+  margin-bottom: 8px;
 `
 
-const isNowInRange = (now: Date, startDateTime: string, endDateTime: string) => {
+const isNowInRange = (
+  now: Date,
+  startDateTime: string,
+  endDateTime: string,
+) => {
   const start = new Date(startDateTime).getTime()
   const end = new Date(endDateTime).getTime()
   const current = now.getTime()
@@ -40,6 +46,7 @@ const DateGroupComponent = ({
   tagColors,
   activeEventId,
   forcedLiveEventId = null,
+  onEventClick,
 }: DateGroupProps) => {
   return (
     <Wrapper>
@@ -54,6 +61,7 @@ const DateGroupComponent = ({
           }
           tagColors={tagColors}
           isActive={activeEventId === event.id}
+          onClick={onEventClick}
         />
       ))}
     </Wrapper>

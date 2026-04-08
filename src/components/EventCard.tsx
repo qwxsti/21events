@@ -9,6 +9,7 @@ interface EventCardProps {
   isNow: boolean
   isActive: boolean
   tagColors: TagColorItem[]
+  onClick: (id: number) => void
 }
 
 const Card = styled(motion.article)<{
@@ -20,10 +21,16 @@ const Card = styled(motion.article)<{
   border-radius: ${({ theme }) => theme.borderRadius};
   border: 2px solid transparent;
   padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
   display: grid;
   grid-template-columns: 52px 1fr;
   gap: 8px;
   transition: all 0.4s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.innerCard};
+  }
 
   ${({ $isNow, $isActive, theme }) =>
     $isNow &&
@@ -60,14 +67,13 @@ const Content = styled.div`
 `
 
 const Heading = styled.h3`
-  font-size: 2rem; /* Увеличили */
+  font-size: 2rem;
   font-weight: 700;
-  margin: 0 0 0px 0;
-  color: ${props => props.theme.colors.textPrimary};
-  
+  margin: 0;
+  color: ${(props) => props.theme.colors.textPrimary};
   display: -webkit-box;
   -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;  
+  -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.2;
 `
@@ -90,7 +96,6 @@ const Chip = styled.span<{ $bg: string }>`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  word-break: break-all;
 `
 
 const LiveBadge = styled.span`
@@ -102,17 +107,19 @@ const LiveBadge = styled.span`
   font-weight: 700;
 `
 
-const Description = styled.p`
-  display: none;
-`
-
 const formatTime = (date: string) =>
   new Intl.DateTimeFormat('ru-RU', {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(date))
 
-const EventCardComponent = ({ event, isNow, isActive, tagColors }: EventCardProps) => {
+const EventCardComponent = ({
+  event,
+  isNow,
+  isActive,
+  tagColors,
+  onClick,
+}: EventCardProps) => {
   const start = formatTime(event.startDateTime)
   const end = formatTime(event.endDateTime)
   const accentColor = useMemo(
@@ -126,6 +133,8 @@ const EventCardComponent = ({ event, isNow, isActive, tagColors }: EventCardProp
       $isActive={isActive}
       $activeAccent={accentColor}
       data-event-id={event.id}
+      onClick={() => onClick(event.id)}
+      whileTap={{ scale: 0.98 }}
       animate={{ scale: isActive ? 1.02 : 1 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
@@ -136,26 +145,12 @@ const EventCardComponent = ({ event, isNow, isActive, tagColors }: EventCardProp
       <Content>
         <Heading>{event.name}</Heading>
         <Chips>
-          <Chip $bg={accentColor}>
-            {event.location || 'Без локации'}
-          </Chip>
+          <Chip $bg={accentColor}>{event.location || 'Без локации'}</Chip>
           {isNow && <LiveBadge>Идет сейчас</LiveBadge>}
         </Chips>
-        <Description>{event.description || 'Описание отсутствует'}</Description>
       </Content>
     </Card>
   )
 }
 
-export const EventCard = memo(
-  EventCardComponent,
-  (prev, next) =>
-    prev.event.id === next.event.id &&
-    prev.event.location === next.event.location &&
-    prev.event.startDateTime === next.event.startDateTime &&
-    prev.event.endDateTime === next.event.endDateTime &&
-    prev.event.name === next.event.name &&
-    prev.tagColors === next.tagColors &&
-    prev.isNow === next.isNow &&
-    prev.isActive === next.isActive,
-)
+export const EventCard = memo(EventCardComponent)

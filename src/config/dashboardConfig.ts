@@ -7,7 +7,7 @@ export interface SchoolAdItem {
 }
 
 export const ROTATION_INTERVAL_MS = 25000
-export const DEBUG_MOCK_LIVE = false;
+export const DEBUG_MOCK_LIVE = false
 export const CLUB_ASSETS: Record<string, string> = {
   'SONIC HUB:': '/clubs_preview/example.jpg',
 }
